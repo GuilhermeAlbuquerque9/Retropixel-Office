@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Slides - Retropixel Office™</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Segoe UI, sans-serif;
+  background: #f5f5f5;
+}
+
+/* topo */
+.topbar {
+  background: linear-gradient(#ff5252, #b71c1c);
+  padding: 8px 12px;
+  font-weight: bold;
+  color: white;
+}
+
+/* toolbar */
+.toolbar {
+  background: linear-gradient(#ff8a80, #c62828);
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar button, .toolbar input {
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+}
+
+.toolbar button {
+  background: white;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: #eee;
+}
+
+/* layout */
+.main {
+  display: flex;
+  height: calc(100vh - 100px);
+}
+
+/* sidebar */
+#sidebar {
+  width: 200px;
+  background: #ffcdd2;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.slide-thumb {
+  background: white;
+  padding: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.slide-thumb.active {
+  border: 2px solid #c62828;
+}
+
+/* slide */
+#slide {
+  flex: 1;
+  background: white;
+  margin: 20px;
+  padding: 20px;
+  outline: none;
+  border-radius: 6px;
+}
+
+/* apresentação */
+.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 40px;
+  font-size: 42px;
+  background: white;
+  z-index: 9999;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  🎞 <span id="tituloArquivo">Sem título.rshow</span>
+</div>
+
+<div class="toolbar">
+  <button onclick="novo()">Novo</button>
+  <button onclick="novoSlide()">Novo Slide</button>
+  <button onclick="excluirSlide()">Excluir Slide</button>
+  <input type="color" onchange="mudarFundo(this.value)">
+  <button onclick="salvar()">💾 Salvar</button>
+  <button onclick="salvarComo()">Salvar como</button>
+  <button onclick="abrir()">Abrir</button>
+  <button onclick="apresentar()">▶ Apresentar</button>
+</div>
+
+<div class="main">
+  <div id="sidebar"></div>
+  <div id="slide" contenteditable="true"></div>
+</div>
+
+<script>
+let slides = [];
+let slideAtual = 0;
+let fileHandle = null;
+let nomeArquivo = "Sem título";
+let apresentando = false;
+
+/* ===== INIT ===== */
+
+function novo() {
+  if (confirm("Nova apresentação?")) {
+    slides = [{ conteudo: "<h1>Novo Slide</h1>", fundo: "#ffffff" }];
+    slideAtual = 0;
+    fileHandle = null;
+    nomeArquivo = "Sem título";
+    render();
+  }
+}
+
+/* ===== RENDER ===== */
+
+function render() {
+  const sidebar = document.getElementById("sidebar");
+  const slideDiv = document.getElementById("slide");
+
+  sidebar.innerHTML = "";
+
+  slides.forEach((s, i) => {
+    const d = document.createElement("div");
+    d.className = "slide-thumb" + (i === slideAtual ? " active" : "");
+    d.innerText = "Slide " + (i + 1);
+    d.onclick = () => {
+      salvarAtual();
+      slideAtual = i;
+      render();
+    };
+    sidebar.appendChild(d);
+  });
+
+  slideDiv.innerHTML = slides[slideAtual].conteudo;
+  slideDiv.style.background = slides[slideAtual].fundo;
+
+  atualizarTitulo();
+}
+
+/* ===== SLIDES ===== */
+
+function salvarAtual() {
+  slides[slideAtual].conteudo = document.getElementById("slide").innerHTML;
+}
+
+function novoSlide() {
+  salvarAtual();
+  slides.push({ conteudo: "<h1>Novo Slide</h1>", fundo: "#ffffff" });
+  slideAtual = slides.length - 1;
+  render();
+}
+
+function excluirSlide() {
+  if (slides.length === 1) {
+    alert("Não é possível excluir o único slide!");
+    return;
+  }
+
+  if (confirm("Excluir este slide?")) {
+    slides.splice(slideAtual, 1);
+    if (slideAtual > 0) slideAtual--;
+    render();
+  }
+}
+
+function mudarFundo(cor) {
+  slides[slideAtual].fundo = cor;
+  render();
+}
+
+/* ===== APRESENTAÇÃO ===== */
+
+function apresentar() {
+  salvarAtual();
+
+  const slideDiv = document.getElementById("slide");
+
+  apresentando = true;
+
+  slideDiv.contentEditable = false;
+  slideDiv.classList.add("fullscreen");
+
+  if (slideDiv.requestFullscreen) {
+    slideDiv.requestFullscreen();
+  }
+
+  document.addEventListener("keydown", controleApresentacao);
+}
+
+function controleApresentacao(e) {
+  if (!apresentando) return;
+
+  if (e.key === "ArrowRight") proximo();
+  if (e.key === "ArrowLeft") anterior();
+  if (e.key === "Escape") sairApresentacao();
+}
+
+function proximo() {
+  if (slideAtual < slides.length - 1) {
+    slideAtual++;
+    render();
+  }
+}
+
+function anterior() {
+  if (slideAtual > 0) {
+    slideAtual--;
+    render();
+  }
+}
+
+function sairApresentacao() {
+  const slideDiv = document.getElementById("slide");
+
+  apresentando = false;
+
+  slideDiv.classList.remove("fullscreen");
+  slideDiv.contentEditable = true;
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+
+  document.removeEventListener("keydown", controleApresentacao);
+}
+
+/* detectar saída manual do fullscreen */
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && apresentando) {
+    sairApresentacao();
+  }
+});
+
+/* ===== SALVAR ===== */
+
+async function salvar() {
+  salvarAtual();
+
+  const conteudo = JSON.stringify({
+    tipo: "slides",
+    versao: 2,
+    nome: nomeArquivo,
+    slides
+  });
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      if (!fileHandle) return salvarComo();
+
+      const w = await fileHandle.createWritable();
+      await w.write(conteudo);
+      await w.close();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    downloadArquivo(conteudo, nomeArquivo + ".rshow");
+  }
+}
+
+/* ===== SALVAR COMO ===== */
+
+async function salvarComo() {
+  if ('showSaveFilePicker' in window) {
+    try {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: "apresentacao.rshow",
+        types: [{
+          accept: { "application/json": [".rshow"] }
+        }]
+      });
+
+      nomeArquivo = fileHandle.name.replace(".rshow", "");
+      await salvar();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    const nome = prompt("Nome do arquivo:", nomeArquivo);
+    if (!nome) return;
+
+    nomeArquivo = nome;
+    salvar();
+  }
+}
+
+/* ===== ABRIR ===== */
+
+async function abrir() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          accept: { "application/json": [".rshow"] }
+        }]
+      });
+
+      fileHandle = handle;
+
+      const file = await handle.getFile();
+      const data = JSON.parse(await file.text());
+
+      if (data.tipo !== "slides") return alert("Arquivo inválido!");
+
+      slides = data.slides || [];
+      nomeArquivo = data.nome || "Sem título";
+      slideAtual = 0;
+
+      render();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    abrirFallback(".rshow", (data) => {
+      slides = data.slides || [];
+      nomeArquivo = data.nome || "Sem título";
+      slideAtual = 0;
+      render();
+    });
+  }
+}
+
+/* ===== UI ===== */
+
+function atualizarTitulo() {
+  document.getElementById("tituloArquivo").innerText = nomeArquivo + ".rshow";
+}
+
+/* ===== HELPERS ===== */
+
+function downloadArquivo(conteudo, nome) {
+  const blob = new Blob([conteudo], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  a.click();
+}
+
+function abrirFallback(ext, callback) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ext;
+
+  input.onchange = e => {
+    const reader = new FileReader();
+    reader.onload = () => callback(JSON.parse(reader.result));
+    reader.readAsText(e.target.files[0]);
+  };
+
+  input.click();
+}
+
+/* INIT */
+novo();
+</script>
+
+</body>
+</html>
