@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Write - Retropixel Office™</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Segoe UI, sans-serif;
+  background: #f3f3f3;
+}
+
+/* toolbar estilo Office */
+.toolbar {
+  background: linear-gradient(#fff3b0, #ffd54d);
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.toolbar button, .toolbar select, .toolbar input {
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.toolbar button {
+  background: white;
+  min-width: 32px;
+}
+
+.toolbar button:hover {
+  background: #eee;
+}
+
+/* editor */
+.editor {
+  width: 100%;
+  height: calc(100vh - 70px);
+  padding: 20px;
+  box-sizing: border-box;
+  outline: none;
+  background: white;
+  overflow-y: auto;
+  font-size: 16px;
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+
+  <button onclick="formatar('bold')"><b>B</b></button>
+  <button onclick="formatar('italic')"><i>I</i></button>
+  <button onclick="formatar('underline')"><u>U</u></button>
+
+  <select onchange="mudarFonte(this.value)">
+    <option value="Arial">Arial</option>
+    <option value="Times New Roman">Times New Roman</option>
+    <option value="Courier New">Courier New</option>
+  </select>
+
+  <select onchange="mudarTamanho(this.value)">
+    <option value="1">Pequeno</option>
+    <option value="3" selected>Médio</option>
+    <option value="5">Grande</option>
+    <option value="7">Gigante</option>
+  </select>
+
+  <input type="color" onchange="mudarCor(this.value)">
+
+  <button onclick="novo()">Novo</button>
+  <button onclick="abrir()">Abrir</button>
+  <button onclick="salvar()">💾 Salvar</button>
+
+</div>
+
+<div id="editor" class="editor" contenteditable="true">
+  Comece a escrever...
+</div>
+
+<script>
+let fileHandle = null;
+
+/* ===== FORMATAÇÃO ===== */
+
+function formatar(cmd) {
+  document.execCommand(cmd, false, null);
+}
+
+function mudarCor(cor) {
+  document.execCommand("foreColor", false, cor);
+}
+
+function mudarFonte(fonte) {
+  document.execCommand("fontName", false, fonte);
+}
+
+function mudarTamanho(tam) {
+  document.execCommand("fontSize", false, tam);
+}
+
+/* ===== DOCUMENTO ===== */
+
+function novo() {
+  if (confirm("Novo documento?")) {
+    document.getElementById("editor").innerHTML = "";
+    fileHandle = null;
+  }
+}
+
+/* ===== SALVAR ===== */
+
+async function salvar() {
+  const conteudo = document.getElementById("editor").innerHTML;
+
+  const arquivo = JSON.stringify({
+    tipo: "write",
+    versao: 1,
+    conteudo
+  });
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      if (!fileHandle) {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: "documento.rdoc",
+          types: [{
+            description: "Documento Retropixel",
+            accept: { "application/json": [".rdoc"] }
+          }]
+        });
+      }
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(arquivo);
+      await writable.close();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    downloadArquivo(arquivo, "documento.rdoc");
+  }
+}
+
+/* ===== ABRIR ===== */
+
+async function abrir() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          accept: { "application/json": [".rdoc"] }
+        }]
+      });
+
+      fileHandle = handle;
+
+      const file = await handle.getFile();
+      const data = JSON.parse(await file.text());
+
+      if (data.tipo !== "write") return alert("Arquivo inválido!");
+
+      document.getElementById("editor").innerHTML = data.conteudo;
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    abrirFallback(".rdoc", (data) => {
+      document.getElementById("editor").innerHTML = data.conteudo;
+    });
+  }
+}
+
+/* ===== HELPERS ===== */
+
+function downloadArquivo(conteudo, nome) {
+  const blob = new Blob([conteudo], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  a.click();
+}
+
+function abrirFallback(ext, callback) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ext;
+
+  input.onchange = e => {
+    const reader = new FileReader();
+    reader.onload = () => callback(JSON.parse(reader.result));
+    reader.readAsText(e.target.files[0]);
+  };
+
+  input.click();
+}
+</script>
+
+</body>
+</html>
