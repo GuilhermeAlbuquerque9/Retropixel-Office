@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Tasks - Retropixel Office™</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Segoe UI, sans-serif;
+  background: #f3f3f3;
+}
+
+/* topo */
+.topbar {
+  background: linear-gradient(#eceff1, #b0bec5);
+  padding: 8px 12px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* toolbar */
+.toolbar {
+  background: linear-gradient(#cfd8dc, #90a4ae);
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.toolbar button, .toolbar input, .toolbar select {
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+}
+
+.toolbar input[type="text"] {
+  flex: 1;
+}
+
+.toolbar button {
+  background: white;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: #eee;
+}
+
+/* lista */
+.container {
+  padding: 20px;
+}
+
+.task {
+  background: white;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task.done span {
+  text-decoration: line-through;
+  color: gray;
+}
+
+.task small {
+  color: #666;
+}
+
+.task button {
+  margin-left: 10px;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- NOME DO ARQUIVO -->
+<div class="topbar">
+  📄 <span id="tituloArquivo">Sem título.rtask</span>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+
+  <button onclick="novo()">Novo</button>
+
+  <input type="text" id="novaTarefa" placeholder="Digite uma tarefa...">
+
+  <select id="prioridade">
+    <option value="baixa">Baixa</option>
+    <option value="media">Média</option>
+    <option value="alta">Alta</option>
+  </select>
+
+  <input type="date" id="data">
+
+  <button onclick="adicionar()">Adicionar</button>
+
+  <button onclick="salvar()">💾 Salvar</button>
+  <button onclick="salvarComo()">Salvar como</button>
+  <button onclick="abrir()">Abrir</button>
+
+</div>
+
+<!-- LISTA -->
+<div class="container" id="lista"></div>
+
+<script>
+let tarefas = [];
+let fileHandle = null;
+let nomeArquivo = "Sem título";
+
+/* ===== RENDER ===== */
+
+function render() {
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+
+  tarefas.sort((a, b) => {
+    if (a.done !== b.done) return a.done - b.done;
+    if (a.prioridade !== b.prioridade) return prioridadeValor(b.prioridade) - prioridadeValor(a.prioridade);
+    return (a.data || "").localeCompare(b.data || "");
+  });
+
+  tarefas.forEach((t, i) => {
+    const div = document.createElement("div");
+    div.className = "task" + (t.done ? " done" : "");
+
+    const info = document.createElement("div");
+
+    const texto = document.createElement("span");
+    texto.innerText = t.texto;
+
+    const meta = document.createElement("small");
+    meta.innerText = `${t.prioridade.toUpperCase()} ${t.data ? "• " + t.data : ""}`;
+
+    info.append(texto, document.createElement("br"), meta);
+
+    const done = document.createElement("button");
+    const img = document.createElement("img");
+img.src = "../icons/ok.png";
+img.style.width = "16px";
+
+done.innerHTML = "";
+done.appendChild(img);
+    done.onclick = () => {
+      t.done = !t.done;
+      render();
+    };
+
+    const del = document.createElement("button");
+    del.innerText = "🗑";
+    del.onclick = () => {
+      tarefas.splice(i, 1);
+      render();
+    };
+
+    div.append(info, done, del);
+    lista.appendChild(div);
+  });
+
+  atualizarTitulo();
+}
+
+/* ===== PRIORIDADE ===== */
+
+function prioridadeValor(p) {
+  return { baixa: 1, media: 2, alta: 3 }[p] || 0;
+}
+
+/* ===== ADICIONAR ===== */
+
+function adicionar() {
+  const texto = document.getElementById("novaTarefa").value;
+  const prioridade = document.getElementById("prioridade").value;
+  const data = document.getElementById("data").value;
+
+  if (!texto) return;
+
+  tarefas.push({
+    texto,
+    done: false,
+    prioridade,
+    data
+  });
+
+  document.getElementById("novaTarefa").value = "";
+  render();
+}
+
+/* ===== NOVO ===== */
+
+function novo() {
+  if (confirm("Nova lista?")) {
+    tarefas = [];
+    fileHandle = null;
+    nomeArquivo = "Sem título";
+    render();
+  }
+}
+
+/* ===== SALVAR ===== */
+
+async function salvar() {
+  const conteudo = JSON.stringify({
+    tipo: "tasks",
+    versao: 2,
+    nome: nomeArquivo,
+    tarefas
+  });
+
+  if ('showSaveFilePicker' in window) {
+    try {
+      if (!fileHandle) return salvarComo();
+
+      const w = await fileHandle.createWritable();
+      await w.write(conteudo);
+      await w.close();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    downloadArquivo(conteudo, nomeArquivo + ".rtask");
+  }
+}
+
+/* ===== SALVAR COMO ===== */
+
+async function salvarComo() {
+  if ('showSaveFilePicker' in window) {
+    try {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: "tarefas.rtask",
+        types: [{
+          accept: { "application/json": [".rtask"] }
+        }]
+      });
+
+      nomeArquivo = fileHandle.name.replace(".rtask", "");
+      await salvar();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    const nome = prompt("Nome do arquivo:", nomeArquivo);
+    if (!nome) return;
+
+    nomeArquivo = nome;
+    salvar();
+  }
+}
+
+/* ===== ABRIR ===== */
+
+async function abrir() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          accept: { "application/json": [".rtask"] }
+        }]
+      });
+
+      fileHandle = handle;
+
+      const file = await handle.getFile();
+      const data = JSON.parse(await file.text());
+
+      if (data.tipo !== "tasks") return alert("Arquivo inválido!");
+
+      tarefas = data.tarefas || [];
+      nomeArquivo = data.nome || "Sem título";
+
+      render();
+
+    } catch (e) { console.log(e); }
+
+  } else {
+    abrirFallback(".rtask", (data) => {
+      tarefas = data.tarefas || [];
+      nomeArquivo = data.nome || "Sem título";
+      render();
+    });
+  }
+}
+
+/* ===== UI ===== */
+
+function atualizarTitulo() {
+  document.getElementById("tituloArquivo").innerText = nomeArquivo + ".rtask";
+}
+
+/* ===== HELPERS ===== */
+
+function downloadArquivo(conteudo, nome) {
+  const blob = new Blob([conteudo], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  a.click();
+}
+
+function abrirFallback(ext, callback) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ext;
+
+  input.onchange = e => {
+    const reader = new FileReader();
+    reader.onload = () => callback(JSON.parse(reader.result));
+    reader.readAsText(e.target.files[0]);
+  };
+
+  input.click();
+}
+</script>
+
+</body>
+</html>
